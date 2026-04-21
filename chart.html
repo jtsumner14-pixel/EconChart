@@ -280,7 +280,7 @@ function setLoad(pct, msg) {
 }
 
 function renderTable() {
-  const yrCols = getYearColumns(parseInt(document.getElementById('yrCount').value));
+  const yrCols = getYearColumns(parseInt(document.getElementById('yrCount').value-1));
   const moCols = getMonthColumns(monthsToShow);
 
   const hdr = document.getElementById('colHdr');
@@ -324,7 +324,7 @@ function printPDF() {
 }
 
 function exportExcel() {
-  const yrCols = getYearColumns(parseInt(document.getElementById('yrCount').value));
+  const yrCols = getYearColumns(parseInt(document.getElementById('yrCount').value-1));
   const moCols = getMonthColumns(monthsToShow);
   const allCols = [...yrCols, ...moCols];
   const wb = XLSX.utils.book_new();
