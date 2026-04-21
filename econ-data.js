@@ -5,7 +5,7 @@
 // ============================================================
 
 // ── CONFIGURE YOUR SUPABASE PROJECT ───────────────────────
-const SUPABASE_URL      = 'https://gtzwdcrkcavaafbsodzw.supabase.co/rest/v1/';
+const SUPABASE_URL      = 'https://gtzwdcrkcavaafbsodzw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0endkY3JrY2F2YWFmYnNvZHp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3ODcxOTMsImV4cCI6MjA5MjM2MzE5M30.0rumJkOGutGBI86DIMWYj_-eOvBFlm0V4XC7Jde6ZFw';
 // ──────────────────────────────────────────────────────────
 // SQL to run in Supabase SQL Editor to create required tables:
