@@ -57,7 +57,7 @@ function getMonthColumns(count) {
 }
 
 function getYearColumns(count) {
-  const y = new Date().getFullYear();
+  const y = new Date().getFullYear() - 1; // end at prior year-end
   const cols = [];
   for (let i = count - 1; i >= 0; i--)
     cols.push({ key: String(y - i), label: String(y - i) });
@@ -460,85 +460,37 @@ function fmtVal(v) {
 }
 
 // ── FRED FETCH ─────────────────────────────────────────────
+// FRED blocks direct browser requests (CORS). We call a Supabase Edge Function
+// that runs server-side, fetches FRED, and saves results directly to the DB.
 async function refreshFREDData(onProgress) {
-  const startDate = `${new Date().getFullYear()-15}-01-01`;
-  let fetched=0, errors=0;
-  const directSeries = {};
+  onProgress && onProgress('Calling Supabase Edge Function…');
 
-  for (const [,cfg] of Object.entries(FRED_SERIES)) {
-    if (cfg.isComputed || !cfg.id) continue;
-    try {
-      onProgress && onProgress(`Fetching ${cfg.id}…`);
-      const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${cfg.id}&api_key=${FRED_API_KEY}&file_type=json&observation_start=${startDate}&frequency=m&aggregation_method=eop`;
-      const r = await fetch(url);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      directSeries[cfg.id] = data.observations || [];
-      fetched++;
-    } catch(e) {
-      console.warn(e); errors++;
-    }
+  const edgeFnUrl = `${SUPABASE_URL}/functions/v1/fred-fetch`;
+
+  const r = await fetch(edgeFnUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+  });
+
+  if (!r.ok) {
+    const txt = await r.text();
+    throw new Error(`Edge Function error ${r.status}: ${txt}`);
   }
 
-  const batch = [];
+  const result = await r.json();
 
-  for (const [ind, cfg] of Object.entries(FRED_SERIES)) {
-    if (cfg.isComputed || !cfg.id || !directSeries[cfg.id]) continue;
-    const byYM={}, byY={};
-    for (const o of directSeries[cfg.id]) {
-      if (o.value==='.') continue;
-      const v=parseFloat(o.value); if (isNaN(v)) continue;
-      const [y,m]=o.date.split('-'); const ym=`${y}-${m}`;
-      byYM[ym]=v;
-      if (!byY[y]||m>=(byY[y].m||'00')) byY[y]={v,m};
-    }
-    if (cfg.isYoY) {
-      for (const ym of Object.keys(byYM).sort()) {
-        const [y,mo]=ym.split('-'), prev=`${y-1}-${mo}`;
-        if (byYM[prev]) batch.push({indicator:ind,period:ym,value:String(+((byYM[ym]-byYM[prev])/byYM[prev]*100).toFixed(1))});
-      }
-      for (const [yr,d] of Object.entries(byY)) {
-        const prev=`${yr-1}-${d.m}`;
-        if (byYM[prev]) batch.push({indicator:ind,period:yr,value:String(+((d.v-byYM[prev])/byYM[prev]*100).toFixed(1))});
-      }
-    } else {
-      const fmt=cfg.fmt||(x=>x);
-      for (const [ym,v] of Object.entries(byYM)) batch.push({indicator:ind,period:ym,value:String(fmt(v))});
-      for (const [yr,d] of Object.entries(byY))  batch.push({indicator:ind,period:yr, value:String(fmt(d.v))});
-    }
+  if (!result.ok) throw new Error(result.error || 'Edge Function returned an error');
+
+  // Stream the server-side log lines to the UI
+  for (const line of (result.log || [])) {
+    onProgress && onProgress(line);
   }
 
-  // Yield spread (computed)
-  for (const [ind,cfg] of Object.entries(FRED_SERIES)) {
-    if (!cfg.isComputed) continue;
-    const [aId,bId]=cfg.components;
-    const aObs=directSeries[aId], bObs=directSeries[bId];
-    if (!aObs||!bObs) continue;
-    const bMap={};
-    for (const o of bObs) if (o.value!=='.') bMap[o.date.slice(0,7)]=parseFloat(o.value);
-    const byY={};
-    for (const o of aObs) {
-      if (o.value==='.') continue;
-      const ym=o.date.slice(0,7), [y,m]=ym.split('-');
-      if (bMap[ym]!==undefined) {
-        const s=cfg.fmt(parseFloat(o.value),bMap[ym]);
-        batch.push({indicator:ind,period:ym,value:String(s)});
-        if (!byY[y]||m>=(byY[y]?.m||'00')) byY[y]={v:s,m};
-      }
-    }
-    for (const [yr,d] of Object.entries(byY)) batch.push({indicator:ind,period:yr,value:String(d.v)});
-    fetched++;
-  }
+  // Reload cache from DB so the chart reflects the new data
+  await loadCache();
 
-  onProgress && onProgress(`Saving ${batch.length} records to Supabase…`);
-  for (let i=0; i<batch.length; i+=400)
-    await sb.upsert('econ_datapoints', batch.slice(i,i+400));
-
-  for (const row of batch) {
-    if (!DATA_CACHE[row.indicator]) DATA_CACHE[row.indicator]={};
-    DATA_CACHE[row.indicator][row.period]=row.value;
-  }
-
-  await sb.setMeta('last_fred_fetch', new Date().toISOString());
-  return {fetched, errors};
+  return { fetched: result.fetched, errors: result.errors };
 }
