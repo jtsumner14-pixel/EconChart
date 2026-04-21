@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dr. Ed's Economic Chart</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="econ-data.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#1a1712;--ink-mid:#4a4540;--ink-faint:#8a8580;--ink-ghost:#c8c4be;
+  --cream:#f7f4ef;--cream-d:#ede9e2;--cream-m:#f2ede6;
+  --rule:#ddd8d0;--rule-d:#c4bfb8;
+  --forest:#1e3a20;--forest-m:#2d5430;--forest-l:#e8f0e6;
+  --navy:#18304a;--sienna:#5c2d0e;--plum:#3a1a4a;
+  --gold:#b8860b;--gold-l:#fef9e8;
+  --fd:var(--font-display);--fs:var(--font-serif);--fm:var(--font-mono);
+  --font-display:'Playfair Display',Georgia,serif;
+  --font-serif:'Source Serif 4',Georgia,serif;
+  --font-mono:'DM Mono','Courier New',monospace;
+}
+html{scroll-behavior:smooth}
+body{background:var(--cream);color:var(--ink);font-family:var(--fs);font-size:13px;line-height:1.5;min-height:100vh}
+
+/* MASTHEAD */
+.masthead{background:var(--forest);background-image:repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,.03) 39px,rgba(255,255,255,.03) 40px);border-bottom:3px solid var(--gold);padding:0 28px;display:flex;align-items:stretch;min-height:70px}
+.masthead-logo{display:flex;align-items:center;padding-right:24px;border-right:1px solid rgba(255,255,255,.15);margin-right:24px;gap:12px}
+.logo-crest{width:42px;height:42px;border:1.5px solid rgba(255,255,255,.38);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+.logo-crest span{font-family:var(--fd);font-size:13px;color:rgba(255,255,255,.88);letter-spacing:2px;line-height:1}
+.logo-crest .cr{width:26px;height:1px;background:rgba(255,255,255,.38)}
+.masthead-title h1{font-family:var(--fd);font-size:21px;font-weight:400;color:#e4f0e4;letter-spacing:.3px}
+.masthead-title .sub{font-size:10px;color:rgba(200,220,200,.5);font-style:italic;margin-top:2px}
+.masthead-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.last-upd{font-family:var(--fm);font-size:10px;color:rgba(200,220,200,.6);letter-spacing:.4px;text-align:right;line-height:1.5}
+.btn-action{display:flex;align-items:center;gap:6px;padding:7px 15px;background:transparent;border:1px solid rgba(255,255,255,.22);color:rgba(220,240,220,.85);font-family:var(--fs);font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn-action:hover{background:rgba(255,255,255,.1)}
+.btn-action.gold{border-color:rgba(184,134,11,.55);color:var(--gold)}
+.btn-action.gold:hover{background:rgba(184,134,11,.1)}
+.btn-action svg{width:13px;height:13px;flex-shrink:0}
+
+/* CONTROLS */
+.controls{background:var(--cream-d);border-bottom:1px solid var(--rule-d);padding:9px 28px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.ctrl-grp{display:flex;align-items:center;gap:8px}
+.ctrl-lbl{font-size:10px;color:var(--ink-faint);letter-spacing:.8px;text-transform:uppercase;font-family:var(--fm)}
+.seg{display:flex;border:1px solid var(--rule-d)}
+.seg-btn{padding:5px 16px;background:var(--cream-m);border:none;border-right:1px solid var(--rule-d);font-family:var(--fs);font-size:12px;color:var(--ink-mid);cursor:pointer;transition:all .15s}
+.seg-btn:last-child{border-right:none}
+.seg-btn.on{background:var(--forest);color:#d4e8d4}
+.seg-btn:hover:not(.on){background:var(--cream)}
+.ctrl-sel{padding:5px 10px;background:var(--cream-m);border:1px solid var(--rule-d);font-family:var(--fs);font-size:12px;color:var(--ink);cursor:pointer;outline:none}
+.ctrl-sel:focus{border-color:var(--forest-m)}
+.status-pill{margin-left:auto;display:flex;align-items:center;gap:6px;font-family:var(--fm);font-size:10px;color:var(--ink-faint)}
+.sdot{width:6px;height:6px;border-radius:50%;background:var(--ink-ghost)}
+.sdot.ok{background:#4caf50}.sdot.busy{background:#ff9800;animation:blink .8s infinite}.sdot.err{background:#e53935}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* TABLE */
+.tscroll{overflow-x:auto;padding:18px 28px 44px}
+table{width:100%;border-collapse:collapse;font-family:var(--fm);font-size:11.5px}
+.sec-row td{padding:9px 12px 6px;font-family:var(--fd);font-size:11px;font-weight:400;letter-spacing:1.5px;text-transform:uppercase;color:white}
+.s-forecast td{background:var(--forest)}
+.s-rates td{background:var(--navy)}
+.s-production td{background:var(--sienna)}
+.s-prices td{background:var(--plum)}
+thead .chdr th{position:sticky;top:0;z-index:5;background:#252220;color:#c8c4be;padding:7px 9px;font-family:var(--fm);font-size:10px;font-weight:500;letter-spacing:.4px;text-align:center;white-space:nowrap;border-right:1px solid rgba(255,255,255,.06)}
+thead .chdr th.th-name{text-align:left;min-width:226px;background:#1e1c1a;border-right:2px solid rgba(255,255,255,.1)}
+thead .chdr th.th-yr{background:#201e1c;color:#908c86}
+thead .chdr th.th-latest{background:#1a2e1a;color:#90c890;border-left:2px solid rgba(100,180,100,.3)}
+tbody tr{border-bottom:1px solid var(--rule);transition:background .1s}
+tbody tr:nth-child(even){background:var(--cream-m)}
+tbody tr:hover{background:var(--cream-d)}
+tbody td{padding:5px 9px;text-align:right;white-space:nowrap;color:var(--ink-mid)}
+tbody td.td-name{text-align:left;font-family:var(--fs);font-size:11.5px;font-weight:300;color:var(--ink);border-right:2px solid var(--rule-d);padding-left:12px;max-width:226px}
+tbody td.td-yr{color:var(--ink-faint);font-size:11px}
+tbody td.td-latest{font-weight:500;color:var(--forest-m);background:rgba(30,58,32,.05);border-left:2px solid rgba(45,84,48,.3)}
+tbody td.empty{color:var(--ink-ghost)}
+.src{display:inline-block;font-family:var(--fm);font-size:8px;padding:1px 3px;margin-left:4px;vertical-align:middle;border:1px solid}
+.src-fred{color:#2d5430;border-color:#2d5430}
+.src-man{color:#562a6e;border-color:#562a6e}
+
+/* FOOTER */
+.footer{background:var(--forest);border-top:2px solid var(--gold);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.footer-copy{font-size:10px;color:rgba(200,220,200,.45);font-style:italic}
+.footer-links{display:flex;gap:18px}
+.footer-links a{font-family:var(--fm);font-size:9px;color:rgba(200,220,200,.45);text-decoration:none;letter-spacing:.5px;text-transform:uppercase}
+.footer-links a:hover{color:rgba(200,220,200,.85)}
+
+/* LOADING */
+.load-ov{position:fixed;inset:0;z-index:100;background:var(--cream);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .4s}
+.load-ov.done{opacity:0;pointer-events:none}
+.load-crest{font-family:var(--fd);font-size:38px;color:var(--forest);letter-spacing:4px}
+.load-bar{width:200px;height:2px;background:var(--rule-d);overflow:hidden}
+.load-fill{height:100%;background:var(--forest);width:0;transition:width .3s ease}
+.load-msg{font-family:var(--fm);font-size:10px;color:var(--ink-faint);letter-spacing:.8px}
+
+/* ═══════════════════════════════════════════════════════════
+   PRINT / PDF STYLES
+   Target: landscape A4/Letter, minimal margins, single page
+   ═════════════════════════════════════════════════════════ */
+@media print {
+  @page {
+    size: landscape;
+    margin: 6mm 5mm 6mm 5mm;
+  }
+
+  /* Hide interactive chrome */
+  .load-ov, .controls, .footer-links,
+  .btn-action { display: none !important; }
+
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 7.5pt !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Compact masthead */
+  .masthead {
+    min-height: auto !important;
+    padding: 4px 8px !important;
+    border-bottom: 2px solid #b8860b !important;
+    background: #1e3a20 !important;
+    background-image: none !important;
+    display: flex; align-items: center;
+  }
+  .masthead-logo { padding-right: 12px; margin-right: 12px; }
+  .logo-crest { width: 28px; height: 28px; }
+  .logo-crest span { font-size: 9px; }
+  .masthead-title h1 { font-size: 14pt !important; }
+  .masthead-title .sub { font-size: 7pt !important; }
+  .masthead-right { gap: 6px; }
+  .last-upd { font-size: 7pt !important; }
+
+  /* Table scroll — remove overflow so everything prints */
+  .tscroll {
+    overflow: visible !important;
+    padding: 4px 0 0 0 !important;
+  }
+
+  table {
+    font-size: 6.8pt !important;
+    table-layout: fixed;
+    width: 100% !important;
+  }
+
+  thead .chdr th {
+    position: static !important;
+    background: #252220 !important;
+    color: #c8c4be !important;
+    padding: 3px 4px !important;
+    font-size: 6.5pt !important;
+  }
+  thead .chdr th.th-name { background: #1e1c1a !important; min-width: 0 !important; width: 17% !important; }
+  thead .chdr th.th-yr   { background: #201e1c !important; }
+  thead .chdr th.th-latest { background: #1a2e1a !important; }
+
+  .sec-row td {
+    padding: 4px 6px 3px !important;
+    font-size: 7pt !important;
+    letter-spacing: .8px !important;
+  }
+  .s-forecast td  { background: #1e3a20 !important; }
+  .s-rates td     { background: #18304a !important; }
+  .s-production td{ background: #5c2d0e !important; }
+  .s-prices td    { background: #3a1a4a !important; }
+
+  tbody td {
+    padding: 2.5px 4px !important;
+    font-size: 6.8pt !important;
+  }
+  tbody td.td-name {
+    font-size: 6.8pt !important;
+    padding-left: 6px !important;
+  }
+  tbody td.td-latest {
+    background: rgba(30,58,32,.08) !important;
+  }
+
+  .src { display: none !important; }
+
+  .footer {
+    padding: 4px 8px !important;
+    background: #1e3a20 !important;
+    background-image: none !important;
+  }
+  .footer-copy { font-size: 6pt !important; }
+
+  /* Prevent row/section breaks splitting awkwardly */
+  .sec-row { page-break-before: avoid; }
+  tbody tr  { page-break-inside: avoid; }
+  /* Try to keep all content on one page */
+  table { page-break-inside: auto; }
+}
+</style>
+</head>
+<body>
+
+<div class="load-ov" id="loadOv">
+  <div class="load-crest">S&B</div>
+  <div class="load-bar"><div class="load-fill" id="loadFill"></div></div>
+  <div class="load-msg" id="loadMsg">Connecting to database…</div>
+</div>
+
+<header class="masthead">
+  <div class="masthead-logo">
+    <div class="logo-crest"><span>S</span><div class="cr"></div><span>B</span></div>
+    <div class="masthead-title">
+      <h1>Dr. Ed's Economic Chart</h1>
+      <div class="sub">Seifried &amp; Brew &mdash; VB Sentry, LLC</div>
+    </div>
+  </div>
+  <div class="masthead-right">
+    <div class="last-upd" id="lastUpd">Last Updated<br>—</div>
+    <button class="btn-action" onclick="exportExcel()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="12" height="12" rx="1"/><path d="M4 4l6 6M10 4l-6 6"/></svg>
+      Excel
+    </button>
+    <button class="btn-action gold" onclick="printPDF()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 10H2a1 1 0 01-1-1V6a1 1 0 011-1h10a1 1 0 011 1v3a1 1 0 01-1 1h-1"/><path d="M3 5V2h8v3M3 8h8v5H3z"/></svg>
+      PDF
+    </button>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="ctrl-grp">
+    <span class="ctrl-lbl">Monthly</span>
+    <div class="seg">
+      <button class="seg-btn on" id="btn6" onclick="setMonths(6)">6 months</button>
+      <button class="seg-btn"   id="btn12" onclick="setMonths(12)">12 months</button>
+    </div>
+  </div>
+  <div class="ctrl-grp">
+    <span class="ctrl-lbl">Annual years</span>
+    <select class="ctrl-sel" id="yrCount" onchange="renderTable()">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3" selected>3</option>
+      <option value="4">4</option>
+      <option value="5">5</option>
+      <option value="10">10</option>
+    </select>
+  </div>
+  <div class="status-pill">
+    <div class="sdot" id="sdot"></div>
+    <span id="smsg">—</span>
+  </div>
+</div>
+
+<div class="tscroll">
+  <table>
+    <thead><tr class="chdr" id="colHdr"></tr></thead>
+    <tbody id="tBody"></tbody>
+  </table>
+</div>
+
+<footer class="footer">
+  <div class="footer-copy">&copy; 2026 Seifried &amp; Brew, a brand of VB Sentry, LLC. All Rights Reserved.</div>
+  <div class="footer-links">
+    <a href="http://www.seifriedbrew.com" target="_blank">seifriedbrew.com</a>
+    <a href="http://www.velligan-blaxall.com" target="_blank">velligan-blaxall.com</a>
+    <a href="http://www.SentryAdvisory.com" target="_blank">SentryAdvisory.com</a>
+  </div>
+</footer>
+
+<script>
+let monthsToShow = 6;
+
+function setStatus(s, msg) {
+  document.getElementById('sdot').className = 'sdot ' + s;
+  document.getElementById('smsg').textContent = msg;
+}
+function setLoad(pct, msg) {
+  document.getElementById('loadFill').style.width = pct + '%';
+  document.getElementById('loadMsg').textContent = msg;
+}
+
+function renderTable() {
+  const yrCols = getYearColumns(parseInt(document.getElementById('yrCount').value));
+  const moCols = getMonthColumns(monthsToShow);
+
+  const hdr = document.getElementById('colHdr');
+  hdr.innerHTML =
+    `<th class="th-name">Indicator</th>` +
+    yrCols.map(c => `<th class="th-yr">${c.label}</th>`).join('') +
+    moCols.map((c,i) => `<th class="${i===moCols.length-1?'th-latest':''}">${c.label}</th>`).join('');
+
+  let html = '';
+  for (const sec of SECTIONS) {
+    html += `<tr class="sec-row s-${sec.key}"><td colspan="${1+yrCols.length+moCols.length}">${sec.name}</td></tr>`;
+    for (const ind of sec.indicators) {
+      const isM = MANUAL_ONLY.includes(ind);
+      const badge = `<span class="src ${isM?'src-man':'src-fred'}">${isM?'manual':'FRED'}</span>`;
+      let row = `<tr><td class="td-name">${ind}${badge}</td>`;
+      for (const c of yrCols) {
+        const v = getValue(ind, c.key);
+        row += `<td class="td-yr${v===null?' empty':''}">${fmtVal(v)}</td>`;
+      }
+      for (let i=0; i<moCols.length; i++) {
+        const v = getValue(ind, moCols[i].key);
+        const lat = i===moCols.length-1;
+        row += `<td class="${lat?'td-latest':''}${v===null?' empty':''}">${fmtVal(v)}</td>`;
+      }
+      row += '</tr>';
+      html += row;
+    }
+  }
+  document.getElementById('tBody').innerHTML = html;
+}
+
+function setMonths(n) {
+  monthsToShow = n;
+  document.getElementById('btn6').classList.toggle('on', n===6);
+  document.getElementById('btn12').classList.toggle('on', n===12);
+  renderTable();
+}
+
+function printPDF() {
+  window.print();
+}
+
+function exportExcel() {
+  const yrCols = getYearColumns(parseInt(document.getElementById('yrCount').value));
+  const moCols = getMonthColumns(monthsToShow);
+  const allCols = [...yrCols, ...moCols];
+  const wb = XLSX.utils.book_new();
+  const rows = [
+    ["Dr. Ed's Economic Chart"],
+    [`Last Updated: ${new Date().toLocaleDateString()}`],
+    [],
+    ['Indicator', ...allCols.map(c => c.label)],
+  ];
+  for (const sec of SECTIONS) {
+    rows.push([sec.name]);
+    for (const ind of sec.indicators)
+      rows.push([ind, ...allCols.map(c => { const v=getValue(ind,c.key); return v!=null?v:''; })]);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:42}, ...allCols.map(()=>({wch:12}))];
+  XLSX.utils.book_append_sheet(wb, ws, 'Economic Chart');
+  XLSX.writeFile(wb, `DrEd_Economic_Chart_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+async function init() {
+  setLoad(10, 'Connecting to Supabase…');
+  setLoad(30, 'Loading chart data…');
+  await loadCache();
+  setLoad(70, 'Seeding initial data if needed…');
+  await seedIfEmpty();
+  setLoad(85, 'Reloading cache…');
+  await loadCache();
+  setLoad(95, 'Rendering…');
+  renderTable();
+
+  // Update last-updated stamp
+  const ts = await sb.getMeta('last_fred_fetch');
+  if (ts) {
+    const d = new Date(ts);
+    document.getElementById('lastUpd').innerHTML =
+      `Last Updated<br>${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`;
+  }
+
+  setLoad(100, 'Ready');
+  setStatus('ok', 'Live — Supabase');
+  setTimeout(() => document.getElementById('loadOv').classList.add('done'), 350);
+}
+
+init().catch(e => {
+  console.error(e);
+  setStatus('err', e.message);
+  setLoad(100, 'Error: ' + e.message);
+  setTimeout(() => document.getElementById('loadOv').classList.add('done'), 1000);
+});
+</script>
+</body>
+</html>
